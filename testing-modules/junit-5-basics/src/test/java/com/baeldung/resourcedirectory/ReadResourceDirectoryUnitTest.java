@@ -1,7 +1,10 @@
 package com.baeldung.resourcedirectory;
 
+import com.baeldung.migration.junit5.extensions.TraceUnitExtension;
 import org.junit.Assert;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -9,6 +12,8 @@ import java.nio.file.Paths;
 
 public class ReadResourceDirectoryUnitTest {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(TraceUnitExtension.class);
+    
     @Test
     public void givenResourcePath_whenReadAbsolutePathWithFile_thenAbsolutePathEndsWithDirectory() {
         String path = "src/test/resources";
@@ -16,8 +21,8 @@ public class ReadResourceDirectoryUnitTest {
         File file = new File(path);
         String absolutePath = file.getAbsolutePath();
 
-        System.out.println(absolutePath);
-        Assert.assertTrue(absolutePath.endsWith("src/test/resources"));
+        LOGGER.debug(absolutePath);
+        Assert.assertTrue(absolutePath.endsWith("src" + File.separator + "test" + File.separator + "resources"));
     }
 
     @Test
@@ -26,8 +31,8 @@ public class ReadResourceDirectoryUnitTest {
 
         String absolutePath = resourceDirectory.toFile().getAbsolutePath();
 
-        System.out.println(absolutePath);
-        Assert.assertTrue(absolutePath.endsWith("src/test/resources"));
+        LOGGER.debug(absolutePath);
+        Assert.assertTrue(absolutePath.endsWith("src" + File.separator + "test" + File.separator + "resources"));
     }
 
     @Test
@@ -38,8 +43,8 @@ public class ReadResourceDirectoryUnitTest {
         File file = new File(classLoader.getResource(resourceName).getFile());
         String absolutePath = file.getAbsolutePath();
 
-        System.out.println(absolutePath);
-        Assert.assertTrue(absolutePath.endsWith("/example_resource.txt"));
+        LOGGER.debug(absolutePath);
+        Assert.assertTrue(absolutePath.endsWith(File.separator + "example_resource.txt"));
     }
 
 }
