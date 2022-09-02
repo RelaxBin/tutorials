@@ -54,48 +54,44 @@ class WebClientIntegrationTest {
 
     @Test
     void givenDifferentWebClientCreationMethods_whenUsed_thenObtainExpectedResponse() {
-        // WebClient creation
-        WebClient client1 = WebClient.create();
-        WebClient client2 = WebClient.create("http://localhost:" + port);
-        WebClient client3 = WebClient.builder()
-          .baseUrl("http://localhost:" + port)
-          .defaultCookie("cookieKey", "cookieValue")
-          .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-          .defaultUriVariables(Collections.singletonMap("url", "http://localhost:8080"))
-          .build();
-
-        // response assertions
+        WebClient client1 = WebClient.builder().clientConnector(httpConnector()).build();
         StepVerifier.create(retrieveResponse(client1.post()
             .uri("http://localhost:" + port + "/resource")))
           .expectNext("processed-bodyValue")
           .verifyComplete();
+
+        WebClient client2 = WebClient.builder().baseUrl("http://localhost:" + port)
+          .clientConnector(httpConnector()).build();
         StepVerifier.create(retrieveResponse(client2))
           .expectNext("processed-bodyValue")
           .verifyComplete();
+
+        WebClient client3 = WebClient.builder()
+          .baseUrl("http://localhost:" + port)
+          .clientConnector(httpConnector())
+          .defaultCookie("cookieKey", "cookieValue")
+          .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+          .defaultUriVariables(Collections.singletonMap("url", "http://localhost:8080"))
+          .build();
         StepVerifier.create(retrieveResponse(client3))
           .expectNext("processed-bodyValue")
           .verifyComplete();
-        // assert response without specifying URI
-        StepVerifier.create(retrieveResponse(client1))
-          .expectErrorMatches(ex -> WebClientRequestException.class.isAssignableFrom(ex.getClass()) && ex.getMessage()
-            .contains("Connection refused"))
-          .verify();
     }
 
     @Test
     void givenDifferentMethodSpecifications_whenUsed_thenObtainExpectedResponse() {
-        // request specification
-        RequestBodyUriSpec uriSpecPost1 = createDefaultClient().method(HttpMethod.POST);
-        RequestBodyUriSpec uriSpecPost2 = createDefaultClient().post();
-        RequestHeadersUriSpec<?> requestGet = createDefaultClient().get();
 
-        // response assertions
+        RequestBodyUriSpec uriSpecPost1 = createDefaultClient().method(HttpMethod.POST);
         StepVerifier.create(retrieveResponse(uriSpecPost1))
           .expectNext("processed-bodyValue")
           .verifyComplete();
+
+        RequestBodyUriSpec uriSpecPost2 = createDefaultClient().post();
         StepVerifier.create(retrieveResponse(uriSpecPost2))
           .expectNext("processed-bodyValue")
           .verifyComplete();
+
+        RequestHeadersUriSpec<?> requestGet = createDefaultClient().get();
         StepVerifier.create(retrieveGetResponse(requestGet))
           .expectNextMatches(nextMap -> nextMap.get("field")
             .equals("value"))
@@ -104,39 +100,45 @@ class WebClientIntegrationTest {
 
     @Test
     void givenDifferentUriSpecifications_whenUsed_thenObtainExpectedResponse() {
-        // uri specification
-        RequestBodySpec bodySpecUsingString = createDefaultPostRequest().uri("/resource");
-        RequestBodySpec bodySpecUsingUriBuilder = createDefaultPostRequest().uri(
-          uriBuilder -> uriBuilder.pathSegment("resource")
-            .build());
-        RequestBodySpec bodySpecusingURI = createDefaultPostRequest().uri(
-          URI.create("http://localhost:" + port + "/resource"));
-        RequestBodySpec bodySpecOverridenBaseUri = createDefaultPostRequest().uri(URI.create("/resource"));
-        RequestBodySpec bodySpecOverridenBaseUri2 = WebClient.builder()
-          .baseUrl("http://localhost:" + port)
-          .build()
-          .post()
-          .uri(URI.create("/resource"));
 
-        // response assertions
+        RequestBodySpec bodySpecUsingString = createDefaultPostRequest().uri("/resource");
         StepVerifier.create(retrieveResponse(bodySpecUsingString))
           .expectNext("processed-bodyValue")
           .verifyComplete();
+
+        RequestBodySpec bodySpecUsingUriBuilder = createDefaultPostRequest().uri(
+          uriBuilder -> uriBuilder.pathSegment("resource")
+            .build());
         StepVerifier.create(retrieveResponse(bodySpecUsingUriBuilder))
           .expectNext("processed-bodyValue")
           .verifyComplete();
+
+        RequestBodySpec bodySpecusingURI = createDefaultPostRequest().uri(
+          URI.create("http://localhost:" + port + "/resource"));
         StepVerifier.create(retrieveResponse(bodySpecusingURI))
           .expectNext("processed-bodyValue")
           .verifyComplete();
-        // assert sending request overriding base URI
-        StepVerifier.create(retrieveResponse(bodySpecOverridenBaseUri))
-          .expectErrorMatches(ex -> WebClientRequestException.class.isAssignableFrom(ex.getClass()) && ex.getMessage()
-            .contains("Connection refused"))
-          .verify();
-        StepVerifier.create(retrieveResponse(bodySpecOverridenBaseUri2))
-          .expectErrorMatches(ex -> WebClientRequestException.class.isAssignableFrom(ex.getClass()) && ex.getMessage()
-            .contains("Connection refused"))
-          .verify();
+    }
+
+    @Test
+    void givenOverriddenUriSpecifications_whenUsed_thenObtainExpectedResponse() {
+        RequestBodySpec bodySpecOverriddenBaseUri = createDefaultPostRequest()
+          .uri(URI.create("http://localhost:" + port + "/resource-override"));
+
+        StepVerifier.create(retrieveResponse(bodySpecOverriddenBaseUri))
+          .expectNext("override-processed-bodyValue")
+          .verifyComplete();
+
+        RequestBodySpec bodySpecOverriddenBaseUri2 = WebClient.builder()
+          .clientConnector(httpConnector())
+          .baseUrl("http://localhost:" + port)
+          .build()
+          .post()
+          .uri(URI.create("http://localhost:" + port + "/resource-override"));
+
+        StepVerifier.create(retrieveResponse(bodySpecOverriddenBaseUri2))
+          .expectNext("override-processed-bodyValue")
+          .verifyComplete();
     }
 
     @Test
@@ -181,7 +183,7 @@ class WebClientIntegrationTest {
         StepVerifier.create(retrieveResponse(headersSpecPlainObject))
           .expectError(CodecException.class)
           .verify();
-        // assert response for request with no body
+        // assert response for request without body
         Mono<Map<String, String>> responsePostWithNoBody = createDefaultPostResourceRequest().exchangeToMono(
           responseHandler -> {
               assertThat(responseHandler.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -280,7 +282,17 @@ class WebClientIntegrationTest {
 
     // helper methods to create default instances
     private WebClient createDefaultClient() {
-        return WebClient.create("http://localhost:" + port);
+        return WebClient.builder()
+          .baseUrl("http://localhost:" + port)
+          .clientConnector(httpConnector())
+          .build();
+    }
+
+    private static ReactorClientHttpConnector httpConnector() {
+        HttpClient httpClient = HttpClient
+          .create()
+          .wiretap(true);
+        return new ReactorClientHttpConnector(httpClient);
     }
 
     private RequestBodyUriSpec createDefaultPostRequest() {
